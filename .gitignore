@@ -23,3 +23,6 @@ builds/
 dist/
 SpaceRadar-*/
 *.zip
+
+# npm run smoke
+.cache/

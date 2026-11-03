@@ -1,5 +1,10 @@
 # Space Radar
 
+> **This fork adds an agent sidebar.** The coding agent you already use (Claude Code, Codex, …)
+> reads the scan, tells you what each big folder is, points at it in the chart and moves what you
+> approve to the Recycle Bin. Built with [skillframe](https://github.com/RuiquanQiao/skillframe);
+> see [SKILLFRAME.md](SKILLFRAME.md). Everything below is the upstream README.
+
 SpaceRadar allows interactive visualization of disk space and memory. It currently supports Sunburst, Treemap, and Flamegraph charts.
 
 ## Downloads

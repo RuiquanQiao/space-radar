@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space Radar agent</title>
+  <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <!-- The sidebar beside Space Radar's chart. Its header continues Space Radar's toolbar (same
+       height, same Photon look, light and dark), so the two read as one window. Only
+       window.spaceRadar (agent/sidebar-preload.js) reaches the rest of the app. -->
+  <style>
+    :root {
+      --bg: #f5f5f4; --ink: #333; --muted: #737373; --line: #c2c0c2; --soft: #ebebea; --accent: #116cd6;
+      --bar-top: #e8e6e8; --bar-bottom: #d1cfd1; --btn-top: #fcfcfc; --btn-bottom: #f1f1f1; --title: #555;
+      --header-h: 90px;
+      font-family: system-ui, "Segoe UI", -apple-system, "Helvetica Neue", sans-serif; font-size: 13px;
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --bg: #222; --ink: #e0e0e0; --muted: #a0a0a0; --line: #3a3a3a; --soft: #2d2d2d; --accent: #6aa8f0;
+      --bar-top: #2d2d2d; --bar-bottom: #252525; --btn-top: #404040; --btn-bottom: #353535; --title: #e0e0e0;
+      color-scheme: dark;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; display: grid; grid-template-rows: var(--header-h) 1fr;
+      background: var(--bg); color: var(--ink); border-left: 1px solid var(--line); box-sizing: border-box;
+    }
+    skillframe-chat {
+      min-width: 0; min-height: 0;
+      --sf-ink: var(--ink); --sf-muted: var(--muted); --sf-line: var(--line); --sf-soft: var(--soft); --sf-accent: var(--accent); --sf-bg: var(--bg);
+    }
+    /* drag to change the sidebar's width */
+    #sr-divider { position: fixed; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 10; touch-action: none; }
+    #sr-divider:hover, #sr-divider.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+    #sr-header {
+      box-sizing: border-box; min-width: 0; display: grid; grid-template-rows: auto 1fr; padding: 0 10px 0 12px;
+      background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid var(--line);
+    }
+    #sr-header h1 { margin: 0; padding-top: 3px; font-size: 13px; font-weight: 400; line-height: 22px; text-align: center; color: var(--title); }
+    #sr-header .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    #sr-header .scanned { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #sr-header .scanned b { color: var(--ink); font-weight: 600; }
+    .sr-btn {
+      flex: none; font: inherit; color: var(--ink); padding: 4px 10px; border-radius: 4px; cursor: default;
+      border: 1px solid var(--line); background: linear-gradient(var(--btn-top), var(--btn-bottom));
+    }
+    .sr-btn:active { background: var(--soft); }
+    .sr-btn:disabled { color: var(--muted); }
+    .sr-btn.icon { padding: 4px 8px; line-height: 1; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  </style>
+</head>
+<body>
+  <div id="sr-divider" role="separator" aria-orientation="vertical"></div>
+  <header id="sr-header">
+    <h1>Agent</h1>
+    <div class="row">
+      <button class="sr-btn" id="sr-analyze" disabled></button>
+      <span class="scanned" id="sr-scanned"></span>
+      <button class="sr-btn icon" id="sr-hide">»</button>
+    </div>
+  </header>
+  <skillframe-chat endpoint="/sf"></skillframe-chat>
+
+  <script type="module">
+    const bridge = window.spaceRadar; // undefined when the page is opened outside Space Radar
+    const chat = document.querySelector("skillframe-chat");
+    const zh = navigator.language.startsWith("zh");
+    const t = (en, cn) => (zh ? cn : en);
+
+    const setTheme = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      chat.setAttribute("theme", theme);
+    };
+    setTheme(new URLSearchParams(location.search).get("dark") === "1" ? "dark" : "light");
+    bridge?.onTheme(setTheme);
+    // the header is as tall as Space Radar's toolbar, which grows when its buttons wrap
+    bridge?.onHeader((h) => document.documentElement.style.setProperty("--header-h", `${h}px`));
+
+    const hide = document.getElementById("sr-hide");
+    hide.title = t("Hide the sidebar (Ctrl+Shift+A)", "隐藏侧边栏（Ctrl+Shift+A）");
+    hide.setAttribute("aria-label", hide.title);
+    hide.onclick = () => bridge?.close();
+
+    // the divider: the view moves as it resizes, so widths come from screen coordinates
+    const divider = document.getElementById("sr-divider");
+    divider.addEventListener("pointerdown", (e) => {
+      if (!bridge) return;
+      divider.setPointerCapture(e.pointerId);
+      divider.classList.add("dragging");
+      const startX = e.screenX;
+      const startWidth = innerWidth;
+      let frame = 0;
+      let width = startWidth;
+      const move = (m) => {
+        width = startWidth - (m.screenX - startX);
+        if (!frame) frame = requestAnimationFrame(() => { frame = 0; bridge.setWidth(width, false); });
+      };
+      const up = () => {
+        divider.classList.remove("dragging");
+        divider.removeEventListener("pointermove", move);
+        bridge.setWidth(width, true);
+      };
+      divider.addEventListener("pointermove", move);
+      divider.addEventListener("pointerup", up, { once: true });
+      divider.addEventListener("pointercancel", up, { once: true });
+    });
+
+    // what is on screen, and one button to have the agent look for space to free in it
+    const analyze = document.getElementById("sr-analyze");
+    const scannedText = document.getElementById("sr-scanned");
+    analyze.textContent = t("Find space I can free", "找出能清理的空间");
+    let scanned = null;
+    const showScan = (s) => {
+      scanned = s && s.root ? s : null;
+      analyze.disabled = !scanned || scanned.scanning;
+      if (!scanned) {
+        scannedText.textContent = t("Scan a drive or folder first", "先扫描一个磁盘或文件夹");
+        scannedText.title = "";
+        return;
+      }
+      scannedText.replaceChildren(Object.assign(document.createElement("b"), { textContent: scanned.scanning ? t("Scanning…", "扫描中…") : scanned.size }), ` ${scanned.root}`);
+      scannedText.title = scanned.root;
+    };
+    showScan(null);
+    bridge?.onScanned(showScan);
+    analyze.onclick = () => {
+      if (!scanned) return;
+      chat.ask({
+        prompt: t(
+          `Look at the scan of ${scanned.root} and find space I can free. For each big item: what it is, whether removing it is safe, and how much it frees. Check anything you are unsure of (read files, run read-only commands) before calling it safe, and point at each one in the chart. Don't move anything yet: list them, biggest first, and I'll decide.`,
+          `看一下 ${scanned.root} 的扫描结果，找出我能清理的空间。每个大项说清楚：它是什么、删掉安不安全、能腾出多少。拿不准的先查清楚（看文件、跑只读命令）再说安全，并在图上指给我看。先别移动任何东西：从大到小列出来，由我决定。`,
+        ),
+        shown: t(`Find space I can free in ${scanned.root}`, `找出 ${scanned.root} 里能清理的空间`),
+      });
+    };
+
+    // "Ask the agent about this" from the chart's right-click menu
+    bridge?.onAsk((prompt, shown) => chat.ask({ prompt, shown }));
+  </script>
+</body>
+</html>

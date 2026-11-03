@@ -8,6 +8,7 @@
     "postinstall": "cd app && npm install",
     "format": "prettier app/js/*.js app/css/*.css tools/*.js --single-quote --no-semi --print-width=120 --write",
     "start": "electron .",
+    "smoke": "electron . --agent-smoke",
     "app": "electron .",
     "debug": "DEBUG=1 electron .",
     "clean": "rm -rf dist builds",
@@ -41,6 +42,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/zz85/space-radar.git"
+  },
+  "dependencies": {
+    "skillframe": "^0.1.4"
   },
   "devDependencies": {
     "electron": "^40.1.0",

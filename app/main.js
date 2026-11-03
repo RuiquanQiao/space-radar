@@ -6,9 +6,12 @@ const {
   ipcMain,
   dialog,
   BrowserWindow,
+  BaseWindow,
   Menu,
   shell,
 } = require("electron");
+// skillframe: the agent sidebar and its tools (agent/main.js)
+const agent = require("./agent/main");
 const { autoUpdater } = require("electron-updater");
 
 app.commandLine.appendSwitch("js-flags", "--expose_gc");
@@ -88,6 +91,12 @@ function buildAppMenu() {
         { role: "zoomout" },
         { type: "separator" },
         { role: "togglefullscreen" },
+        { type: "separator" },
+        {
+          label: "Agent Sidebar",
+          accelerator: "CmdOrCtrl+Shift+A",
+          click: () => agent.setOpen(!agent.isOpen()),
+        },
       ],
     },
     {
@@ -262,13 +271,15 @@ function buildAppMenu() {
 
 // Send color change to renderer process
 function sendColorChange(type, value) {
+  if (type === "darkMode") agent.setDark(value);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("color-change", { type, value });
   }
 }
 
-app.on("ready", function () {
-  mainWindow = require("./js/start")();
+app.on("ready", async function () {
+  await agent.start();
+  mainWindow = agent.openWindow();
 
   // Check for updates and notify user
   autoUpdater.checkForUpdatesAndNotify();
@@ -300,10 +311,9 @@ app.on("ready", function () {
   // IPC handler to open folder selection dialog
   ipcMain.handle("select-folder", async (event) => {
     try {
-      const win = BrowserWindow.getFocusedWindow();
-      const result = await dialog.showOpenDialog(win, {
-        properties: ["openDirectory"],
-      });
+      const win = BaseWindow.getFocusedWindow();
+      const options = { properties: ["openDirectory"] };
+      const result = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
       if (result.canceled) return null;
       return (result.filePaths && result.filePaths[0]) || null;
     } catch (err) {
@@ -314,7 +324,7 @@ app.on("ready", function () {
 
   // Handle new window request from renderer
   ipcMain.on("new-window", () => {
-    const newWin = require("./js/start")();
+    const newWin = agent.openWindow();
     // Note: new windows are independent, closing them won't quit the app
   });
 
