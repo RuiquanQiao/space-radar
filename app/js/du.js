@@ -148,7 +148,9 @@
       return done(dir);
     }
 
-    fs.lstat(dir, (err, stat) => {
+    // bigint: NTFS file IDs pass 2^53, and as plain numbers two folders could get the same inode
+    // below and one would be skipped as a hard link of the other
+    fs.lstat(dir, { bigint: true }, (err, stat) => {
       if (err) {
         // Log error but continue scanning
         console.warn("[du] lstat error:", dir, err.code || err.message);
@@ -161,9 +163,9 @@
         return done(dir);
       }
 
-      let size = stat.size;
+      let size = Number(stat.size);
       if (stat.blocks) {
-        current_size += stat.blocks * 512;
+        current_size += Number(stat.blocks) * 512;
       }
 
       // Skip symbolic links
